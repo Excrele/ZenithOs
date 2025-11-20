@@ -1,4 +1,5 @@
-# Multiboot stub (for future GRUB compat, but we ignore header for now)
+# Kernel entry point
+# EBX contains memory map pointer (passed from bootloader)
 .global _start
 _start:
     mov $0x10, %ax   # Data seg
@@ -9,6 +10,8 @@ _start:
     mov %ax, %ss
     mov $0x90FFF, %esp  # Stack
 
+    # EBX already contains memory map pointer from bootloader
+    # kernel_main can access it via global variable
     call kernel_main
     cli
     hlt

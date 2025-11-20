@@ -4,7 +4,86 @@
 
 start:
     ; Print status
-    mov si, msg_protected
+    mov si, msg_loading
+    call print_string_real
+
+    ; Load kernel from disk (sector 10 onwards)
+    ; Kernel starts after stage1 (sector 1) + stage2 (sectors 2-9) = sector 10
+    ; Load to temporary buffer at 0x90000 (below 1MB, accessible in real mode)
+    ; We'll copy it to 0x100000 after entering protected mode
+    mov si, msg_loading_kernel
+    call print_string_real
+    
+    mov ah, 0x02        ; Read sector function
+    mov al, 64          ; Number of sectors to read (32KB max)
+    mov ch, 0           ; Cylinder 0
+    mov cl, 10          ; Sector 10 (kernel starts here)
+    mov dh, 0           ; Head 0
+    mov dl, 0           ; Drive 0 (floppy A:)
+    mov bx, 0x9000      ; Segment 0x9000
+    mov es, bx
+    mov bx, 0x0000      ; Offset 0 (0x90000)
+    
+    int 0x13            ; BIOS disk service
+    jc kernel_load_error
+    
+    ; Verify we read at least some data
+    cmp al, 0
+    je kernel_load_error
+    
+    mov si, msg_kernel_loaded
+    call print_string_real
+
+    ; Detect memory using E820 (INT 0x15, EAX=0xE820)
+    mov si, msg_detecting_memory
+    call print_string_real
+    
+    ; Memory map will be stored at 0x80000
+    ; Structure: [count(4)] [entries...]
+    mov ax, 0x8000      ; Segment 0x8000
+    mov es, ax
+    mov di, 0x0000      ; Offset 0 (0x80000)
+    mov dword [es:di], 0 ; Initialize count to 0
+    mov si, di          ; Save count location in SI
+    add di, 4           ; Skip count, point to first entry (DI = 4)
+    
+    xor ebx, ebx        ; Continuation value (0 for first call)
+    mov edx, 0x534D4150 ; 'SMAP' signature
+    mov ecx, 24         ; Buffer size (24 bytes per entry)
+    
+e820_loop:
+    mov eax, 0xE820     ; E820 function
+    int 0x15            ; BIOS interrupt
+    jc e820_done        ; CF set on error or end
+    
+    ; Check if we got valid entry
+    cmp eax, 0x534D4150 ; Should return 'SMAP'
+    jne e820_done
+    
+    ; Increment count (at ES:SI)
+    push di
+    mov di, si          ; Point to count
+    inc dword [es:di]   ; Increment count
+    pop di
+    
+    ; Move to next entry (24 bytes per entry)
+    add di, 24
+    
+    ; Check if we have more entries
+    cmp ebx, 0
+    je e820_done        ; EBX=0 means no more entries
+    
+    ; Check if we've filled our buffer (max 127 entries)
+    push di
+    mov di, si          ; Point to count
+    cmp dword [es:di], 127
+    pop di
+    jae e820_done
+    
+    jmp e820_loop
+
+e820_done:
+    mov si, msg_memory_detected
     call print_string_real
 
     ; Setup A20 line (enable >1MB mem)
@@ -38,8 +117,18 @@ protected_mode:
     mov ebx, msg_pm
     call print_pm
 
-    ; Load kernel from disk (assume kernel.bin at sector 10, load to 0x100000)
-    ; For now, stub: Jump to kernel entry (hardcoded)
+    ; Copy kernel from temporary buffer (0x90000) to final location (0x100000)
+    ; Assuming max 32KB kernel (64 sectors * 512 bytes)
+    mov esi, 0x90000    ; Source
+    mov edi, 0x100000   ; Destination
+    mov ecx, 8192       ; 32KB = 8192 dwords
+    rep movsd           ; Copy dwords
+    
+    ; Pass memory map pointer to kernel via EBX register
+    ; Memory map is at 0x80000, kernel can access it there
+    mov ebx, 0x80000    ; Memory map address
+    
+    ; Jump to kernel (kernel_main will receive memory map pointer)
     jmp 0x100000       ; Kernel load addr
 
 print_pm:
@@ -79,5 +168,16 @@ print_string_real:
 .done:
     ret
 
-msg_protected: db 'Switching to Protected Mode...', 0xd, 0xa, 0
-msg_pm:        db 'Hello from Protected Mode! Kernel loading...', 0
+kernel_load_error:
+    mov si, msg_kernel_error
+    call print_string_real
+    cli
+    hlt
+
+msg_loading:         db 'Stage 2 Loaded...', 0xd, 0xa, 0
+msg_loading_kernel:  db 'Loading kernel from disk...', 0xd, 0xa, 0
+msg_kernel_loaded:   db 'Kernel loaded successfully!', 0xd, 0xa, 0
+msg_detecting_memory: db 'Detecting memory...', 0xd, 0xa, 0
+msg_memory_detected:  db 'Memory map created!', 0xd, 0xa, 0
+msg_pm:               db 'Switching to Protected Mode...', 0
+msg_kernel_error:     db 'Kernel load error!', 0xd, 0xa, 0
