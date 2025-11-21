@@ -52,15 +52,61 @@ $(LIBC_STDIO_OBJ): $(LIBC_STDIO_SRC)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Build user programs
-programs: $(BUILD_DIR)/hello.bin
+programs: $(BUILD_DIR)/hello.bin $(BUILD_DIR)/calc.bin $(BUILD_DIR)/cal.bin $(BUILD_DIR)/sysinfo.bin $(BUILD_DIR)/cp.bin $(BUILD_DIR)/rm.bin $(BUILD_DIR)/echo.bin
 
-# Hello World test program
-$(BUILD_DIR)/hello.bin: $(PROGRAMS_DIR)/hello.c $(LIBC_AR) $(LIBC_DIR)/crt0.s
+# Common CRT0 object
+$(BUILD_DIR)/crt0.o: $(LIBC_DIR)/crt0.s
 	@mkdir -p $(BUILD_DIR)
 	$(AS) -f elf32 $(LIBC_DIR)/crt0.s -o $(BUILD_DIR)/crt0.o
+
+# Hello World test program
+$(BUILD_DIR)/hello.bin: $(PROGRAMS_DIR)/hello.c $(LIBC_AR) $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $(PROGRAMS_DIR)/hello.c -o $(BUILD_DIR)/hello.o
 	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/hello.elf $(BUILD_DIR)/crt0.o $(BUILD_DIR)/hello.o $(LIBC_AR)
 	$(OBJCOPY) -O binary $(BUILD_DIR)/hello.elf $@
+
+# Calculator program
+$(BUILD_DIR)/calc.bin: $(PROGRAMS_DIR)/calc.c $(LIBC_AR) $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $(PROGRAMS_DIR)/calc.c -o $(BUILD_DIR)/calc.o
+	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/calc.elf $(BUILD_DIR)/crt0.o $(BUILD_DIR)/calc.o $(LIBC_AR)
+	$(OBJCOPY) -O binary $(BUILD_DIR)/calc.elf $@
+
+# Calendar program
+$(BUILD_DIR)/cal.bin: $(PROGRAMS_DIR)/cal.c $(LIBC_AR) $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $(PROGRAMS_DIR)/cal.c -o $(BUILD_DIR)/cal.o
+	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/cal.elf $(BUILD_DIR)/crt0.o $(BUILD_DIR)/cal.o $(LIBC_AR)
+	$(OBJCOPY) -O binary $(BUILD_DIR)/cal.elf $@
+
+# System info program
+$(BUILD_DIR)/sysinfo.bin: $(PROGRAMS_DIR)/sysinfo.c $(LIBC_AR) $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $(PROGRAMS_DIR)/sysinfo.c -o $(BUILD_DIR)/sysinfo.o
+	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/sysinfo.elf $(BUILD_DIR)/crt0.o $(BUILD_DIR)/sysinfo.o $(LIBC_AR)
+	$(OBJCOPY) -O binary $(BUILD_DIR)/sysinfo.elf $@
+
+# Copy file program
+$(BUILD_DIR)/cp.bin: $(PROGRAMS_DIR)/cp.c $(LIBC_AR) $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $(PROGRAMS_DIR)/cp.c -o $(BUILD_DIR)/cp.o
+	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/cp.elf $(BUILD_DIR)/crt0.o $(BUILD_DIR)/cp.o $(LIBC_AR)
+	$(OBJCOPY) -O binary $(BUILD_DIR)/cp.elf $@
+
+# Remove file program
+$(BUILD_DIR)/rm.bin: $(PROGRAMS_DIR)/rm.c $(LIBC_AR) $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $(PROGRAMS_DIR)/rm.c -o $(BUILD_DIR)/rm.o
+	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/rm.elf $(BUILD_DIR)/crt0.o $(BUILD_DIR)/rm.o $(LIBC_AR)
+	$(OBJCOPY) -O binary $(BUILD_DIR)/rm.elf $@
+
+# Echo program
+$(BUILD_DIR)/echo.bin: $(PROGRAMS_DIR)/echo.c $(LIBC_AR) $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $(PROGRAMS_DIR)/echo.c -o $(BUILD_DIR)/echo.o
+	$(LD) $(LDFLAGS) -o $(BUILD_DIR)/echo.elf $(BUILD_DIR)/crt0.o $(BUILD_DIR)/echo.o $(LIBC_AR)
+	$(OBJCOPY) -O binary $(BUILD_DIR)/echo.elf $@
 
 clean:
 	rm -rf $(BUILD_DIR)
