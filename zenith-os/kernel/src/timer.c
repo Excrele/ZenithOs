@@ -1,6 +1,7 @@
 #include "timer.h"
 #include "idt.h"
 #include "pic.h"
+#include "scheduler.h"
 
 // System tick counter
 static volatile unsigned long long g_ticks = 0;
@@ -20,6 +21,10 @@ static inline unsigned char inb(unsigned short port) {
 // Timer interrupt handler (IRQ 0)
 static void timer_handler(void) {
     g_ticks++;
+    
+    // Call scheduler tick
+    extern void scheduler_tick(void);
+    scheduler_tick();
 }
 
 // Initialize PIT timer

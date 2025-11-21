@@ -3,6 +3,20 @@
 #include "idt.h"
 #include "pic.h"
 #include "timer.h"
+#include "paging.h"
+#include "process.h"
+#include "scheduler.h"
+#include "gdt.h"
+#include "syscall.h"
+#include "vfs.h"
+#include "ata.h"
+#include "fs_simple.h"
+#include "heap.h"
+#include "keyboard.h"
+#include "vga.h"
+#include "shell.h"
+#include "ipc.h"
+#include "serial.h"
 
 // Global memory map pointer (set by bootloader at 0x80000)
 memory_map_t* g_memory_map = (memory_map_t*)0x80000;
@@ -60,18 +74,21 @@ static void print_decimal(unsigned long long value, int row, int col) {
 // Freestanding kernel entry
 // EBX register contains memory map pointer (0x80000)
 void kernel_main(void) {
-    // Clear screen
-    char* video = (char*) 0xb8000;
-    for (int i = 0; i < 80 * 25 * 2; i += 2) {
-        video[i] = ' ';
-        video[i + 1] = 0x0f;
-    }
+    // Initialize VGA driver
+    vga_init();
+    vga_print("Zenith OS Kernel Loaded!\n");
     
-    print_string("Zenith OS Kernel Loaded!", 0, 0);
+    // Initialize GDT (with user mode segments)
+    print_string("Initializing GDT...", 1, 0);
+    gdt_init();
     
     // Initialize Interrupt Descriptor Table
-    print_string("Initializing IDT...", 1, 0);
+    print_string("Initializing IDT...", 1, 20);
     idt_init();
+    
+    // Initialize system calls
+    print_string("Initializing syscalls...", 1, 40);
+    syscall_init();
     
     // Register exception handlers
     idt_register_handler(0, exception_handler_0);
@@ -118,18 +135,70 @@ void kernel_main(void) {
     print_string("Remapping PIC...", 1, 20);
     pic_remap();
     
-    // Initialize timer
-    print_string("Initializing timer...", 1, 40);
-    timer_init();
-    
-    // Enable interrupts
-    asm volatile ("sti");
-    print_string("Interrupts enabled!", 1, 60);
-    
-    // Initialize Physical Memory Manager
-    print_string("Initializing PMM...", 1, 0);
+        // Initialize timer
+        print_string("Initializing timer...", 1, 40);
+        timer_init();
+        
+        // Initialize keyboard
+        print_string("Initializing keyboard...", 1, 60);
+        if (keyboard_init() == 0) {
+            print_string("Keyboard OK", 1, 80);
+        } else {
+            print_string("Keyboard FAIL", 1, 80);
+        }
+        
+        // Initialize Physical Memory Manager (must be before paging)
+    print_string("Initializing PMM...", 2, 0);
     if (pmm_init(g_memory_map) == 0) {
-        print_string("PMM initialized successfully!", 1, 0);
+        print_string("PMM OK", 2, 20);
+        
+        // Initialize paging
+        print_string("Initializing paging...", 2, 30);
+        paging_init();
+        print_string("Paging OK", 2, 50);
+        
+        // Initialize kernel heap
+        print_string("Initializing heap...", 2, 60);
+        if (heap_init() == 0) {
+            print_string("Heap OK", 2, 80);
+        } else {
+            print_string("Heap FAIL", 2, 80);
+        }
+        
+        // Initialize ATA driver
+        print_string("Initializing ATA...", 2, 70);
+        ata_init();
+        
+        // Initialize VFS
+        print_string("Initializing VFS...", 3, 0);
+        vfs_init();
+        
+        // Register file systems
+        simple_fs_register();
+        
+        // Initialize IPC
+        print_string("Initializing IPC...", 3, 40);
+        ipc_init();
+        print_string("IPC OK", 3, 60);
+        
+        // Initialize serial port (COM1)
+        print_string("Initializing Serial...", 3, 70);
+        if (serial_init(COM1_BASE) == 0) {
+            print_string("Serial OK", 3, 90);
+            serial_write(COM1_BASE, "Zenith OS Serial Port Initialized\n");
+        } else {
+            print_string("Serial FAIL", 3, 90);
+        }
+        
+        // Initialize process management
+        print_string("Initializing processes...", 3, 20);
+        process_init();
+        scheduler_init();
+        print_string("Processes OK", 3, 40);
+        
+        // Enable interrupts (after paging is set up)
+        asm volatile ("sti");
+        print_string("Interrupts ON", 3, 15);
         
         // Display PMM statistics
         print_string("PMM Stats:", 2, 0);
@@ -167,6 +236,10 @@ void kernel_main(void) {
         // Display timer ticks
         print_string("Timer ticks: ", 13, 0);
         print_decimal(timer_get_ticks(), 13, 13);
+        
+        // Display process count
+        print_string("Processes: ", 14, 0);
+        print_decimal(process_get_count(), 14, 11);
     } else {
         print_string("Allocation failed!", 7, 0);
     }
@@ -227,15 +300,12 @@ void kernel_main(void) {
         print_string("No memory map available", 16, 0);
     }
     
-    // Main loop - update timer display
-    unsigned long long last_ticks = 0;
+    // Start shell
+    shell_init();
+    shell_run();
+    
+    // Should never reach here
     while (1) {
-        unsigned long long current_ticks = timer_get_ticks();
-        if (current_ticks != last_ticks) {
-            print_string("Timer ticks: ", 13, 0);
-            print_decimal(current_ticks, 13, 13);
-            last_ticks = current_ticks;
-        }
         asm volatile ("hlt");  // Halt until interrupt
     }
 }

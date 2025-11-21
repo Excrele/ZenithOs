@@ -120,6 +120,10 @@ void idt_init(void) {
     idt_set_entry(19, (unsigned long)isr19, 0x08, 0x8E);
     idt_set_entry(20, (unsigned long)isr20, 0x08, 0x8E);
     
+    // Set up system call interrupt (INT 0x80)
+    extern void syscall_interrupt(void);
+    idt_set_entry(0x80, (unsigned long)syscall_interrupt, 0x08, 0xEE); // User-accessible interrupt gate
+    
     // Set up IRQ handlers (32-47)
     idt_set_entry(32, (unsigned long)irq0, 0x08, 0x8E);
     idt_set_entry(33, (unsigned long)irq1, 0x08, 0x8E);
