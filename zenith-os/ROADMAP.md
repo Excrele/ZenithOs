@@ -348,6 +348,35 @@ This roadmap outlines the path from the current minimal kernel to a fully functi
   - Service management
   - Runlevels (optional)
 
+### 8.4 User Programs & Applications
+- [ ] **Standard C Library (libc)**
+  - String functions (strlen, strcpy, strcmp, etc.)
+  - Memory functions (malloc, free, memset, memcpy, etc.)
+  - I/O functions (printf, scanf, fopen, fclose, etc.)
+  - System call wrappers
+  - Utility functions (atoi, itoa, etc.)
+
+- [ ] **User Program Infrastructure**
+  - Build system for user programs
+  - User space linker script
+  - Program loading and execution
+  - argc/argv setup
+
+- [ ] **Time & Date Support**
+  - RTC (Real-Time Clock) driver
+  - Time system calls (time, gettimeofday)
+  - Time library functions (ctime, localtime, etc.)
+
+- [ ] **Basic User Programs**
+  - `calc` - Calculator program
+  - `cal` - Calendar display
+  - `edit` - Text editor
+  - `filemgr` - File manager
+  - `sysinfo` - System information
+  - Enhanced `top` - Process manager
+
+**📋 See [FEATURE_GOALS.md](FEATURE_GOALS.md) for detailed user program goals and roadmap.**
+
 ---
 
 ## Phase 9: Security & Stability

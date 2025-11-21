@@ -467,10 +467,100 @@ int process_exec(const char* path, char* const argv[]) {
         return -1; // Failed to load ELF
     }
     
-    // Update process entry point
+    // Set up argc/argv on user stack
+    // Stack layout (growing downward):
+    // [strings...] [argv[0]] [argv[1]] ... [argv[n]] [NULL] [argc] [padding]
+    
+    // Helper function to get string length
+    static int str_len(const char* s) {
+        int len = 0;
+        while (s[len]) len++;
+        return len;
+    }
+    
+    unsigned int stack_ptr = proc->stack_top;
+    unsigned int argc = 0;
+    
+    // Count arguments
+    if (argv) {
+        while (argv[argc]) {
+            argc++;
+        }
+    }
+    
+    // Calculate total space needed for strings
+    unsigned int total_string_size = 0;
+    if (argv && argc > 0) {
+        for (int i = 0; i < argc; i++) {
+            if (argv[i]) {
+                total_string_size += str_len(argv[i]) + 1;
+            }
+        }
+    } else {
+        // At least program name
+        total_string_size = str_len(path) + 1;
+        argc = 1;
+    }
+    
+    // Align string area
+    total_string_size = (total_string_size + 3) & ~3;
+    
+    // Reserve space for strings (at top of stack area)
+    stack_ptr -= total_string_size;
+    unsigned int string_base = stack_ptr;
+    
+    // Reserve space for argv array
+    stack_ptr -= (argc + 1) * sizeof(char*);
+    char** argv_ptr = (char**)stack_ptr;
+    
+    // Reserve space for argc
+    stack_ptr -= sizeof(int);
+    int* argc_ptr = (int*)stack_ptr;
+    *argc_ptr = argc;
+    
+    // Store argument strings and set up argv pointers
+    unsigned int string_offset = 0;
+    
+    if (argv && argc > 0) {
+        for (int i = 0; i < argc; i++) {
+            if (argv[i]) {
+                int len = str_len(argv[i]);
+                char* str_dest = (char*)(string_base + string_offset);
+                
+                // Copy string
+                for (int j = 0; j <= len; j++) {  // Include null terminator
+                    str_dest[j] = argv[i][j];
+                }
+                
+                // Set argv pointer (relative to stack base)
+                argv_ptr[i] = (char*)(string_base + string_offset);
+                string_offset += len + 1;
+                // Align
+                string_offset = (string_offset + 3) & ~3;
+            } else {
+                argv_ptr[i] = 0;
+            }
+        }
+    } else {
+        // No arguments - just set argv[0] to program name
+        char* prog_name = (char*)string_base;
+        int i = 0;
+        while (path[i]) {
+            prog_name[i] = path[i];
+            i++;
+        }
+        prog_name[i] = '\0';
+        argv_ptr[0] = (char*)string_base;
+    }
+    argv_ptr[argc] = 0;  // NULL terminator
+    
+    // Align stack to 16 bytes
+    stack_ptr = (stack_ptr & ~0xF);
+    
+    // Update process entry point and stack
     proc->registers.eip = entry_point;
-    proc->registers.esp = proc->stack_top - 16;
-    proc->registers.esp_user = proc->registers.esp;
+    proc->registers.esp = stack_ptr;
+    proc->registers.esp_user = stack_ptr;
     
     // Copy name
     int i = 0;
